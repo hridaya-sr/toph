@@ -71,22 +71,61 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   },
 ];
 
+function NavBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="flex h-[18px] min-w-[24px] items-center justify-center rounded-full border border-[#5B9973] bg-[#8CBF9F] px-1.5 text-[11px] font-semibold leading-none tabular-nums text-white">
+      {count}
+    </span>
+  );
+}
+
 export function Sidebar({
   farmName,
   currentUser,
   otherUsers,
   canSwitchUser,
   viewingAsAdminName = null,
+  scheduledShiftCount = 0,
+  flaggedLogCount = 0,
+  unreadMessageCount = 0,
+  newEmployeeCount = 0,
 }: {
   farmName: string;
   currentUser: { id: string; name: string; role: string; avatarColor: string | null; avatarImage: string | null };
   otherUsers: { id: string; name: string; role: string }[];
   canSwitchUser: boolean;
   viewingAsAdminName?: string | null;
+  // Every currently-scheduled (not yet completed) shift assigned to this
+  // employee — see getScheduledShiftCountForEmployee for why this counts
+  // differently than the Dashboard badge above. Always 0 for an admin
+  // (shifts aren't assigned to them), so the badge never renders there.
+  scheduledShiftCount?: number;
+  // Unreviewed logs needing admin attention (see getFlaggedLogCountForReview).
+  // Shown on BOTH Audit Manager and Reports — Reports has no natural "new
+  // item" concept of its own, and the two already share the Compliance nav
+  // group, so this is the most defensible single number to reuse rather
+  // than inventing a second, less-grounded metric. Always 0 for an
+  // employee (both tabs are admin-only, hidden from their nav entirely).
+  flaggedLogCount?: number;
+  // Direct messages sent to this person that they haven't opened yet.
+  unreadMessageCount?: number;
+  // Employees (not admins) who joined the farm today — admin-only, always
+  // 0 for an employee session.
+  newEmployeeCount?: number;
 }) {
   const pathname = usePathname();
   const { unseenCount } = useNewLogs();
   const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  const badgeCountByHref: Record<string, number> = {
+    "/dashboard": unseenCount,
+    "/dashboard/schedule": scheduledShiftCount,
+    "/dashboard/audit-manager": flaggedLogCount,
+    "/dashboard/reports": flaggedLogCount,
+    "/dashboard/messages": unreadMessageCount,
+    "/dashboard/employees": newEmployeeCount,
+  };
 
   return (
     <aside className="flex h-full w-[280px] shrink-0 flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-2.5 text-black">
@@ -134,11 +173,7 @@ export function Sidebar({
                     >
                       <Icon size={16} className="shrink-0 text-[#4d4d4d]" />
                       <span className="flex-1 text-black">{item.label}</span>
-                      {item.href === "/dashboard" && unseenCount > 0 && (
-                        <span className="flex h-[18px] min-w-[24px] items-center justify-center rounded-full border border-[#5B9973] bg-[#8CBF9F] px-1.5 text-[11px] font-semibold leading-none tabular-nums text-white">
-                          {unseenCount}
-                        </span>
-                      )}
+                      <NavBadge count={badgeCountByHref[item.href] ?? 0} />
                     </Link>
                   );
                 })}

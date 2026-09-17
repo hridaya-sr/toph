@@ -1,8 +1,18 @@
 import "server-only";
-import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { db } from "@/db";
-import { activityLogs, activityLogTags, farms, fields, tags, users } from "@/db/schema";
+import {
+  activityLogs,
+  activityLogTags,
+  announcements,
+  directMessages,
+  farms,
+  fields,
+  shifts,
+  tags,
+  users,
+} from "@/db/schema";
 import { ACTIVITY_TYPES } from "@/lib/definitions";
 import { logStartTimestamp } from "@/lib/time";
 
@@ -202,10 +212,28 @@ export async function getFarmEmployees(farmId: string) {
       role: users.role,
       avatarColor: users.avatarColor,
       avatarImage: users.avatarImage,
+      createdAt: users.createdAt,
     })
     .from(users)
     .where(eq(users.farmId, farmId))
     .orderBy(users.name);
+}
+
+// Drives the Employees nav badge — employees (not admins) who joined the
+// farm today, whether via an admin creating their account or self-serve
+// via the invite code. Same "count of things today, no dismissal" shape
+// as getScheduledShiftCountForEmployee, for the same reason: this is a
+// standing fact ("N people joined today"), not a per-viewer dismissible
+// stream.
+export async function getNewEmployeeCountToday(farmId: string) {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(users)
+    .where(and(eq(users.farmId, farmId), eq(users.role, "employee"), gte(users.createdAt, startOfToday)));
+  return row?.count ?? 0;
 }
 
 export async function getFarmFields(farmId: string) {
@@ -227,4 +255,303 @@ export async function getFarmUserById(farmId: string, userId: string) {
     .where(and(eq(users.id, userId), eq(users.farmId, farmId)))
     .limit(1);
   return rows[0] ?? null;
+}
+
+// ---------- Schedule ----------
+
+// Farm-scoped, date-range-scoped, with an optional employeeId filter for
+// the employee-scoped calendar view — same shared-function-with-optional-
+// filter shape as getActivityLogsForFarm.
+export async function getShiftsForFarm(
+  farmId: string,
+  weekStart: string,
+  weekEnd: string,
+  employeeId?: string
+) {
+  const conditions = [eq(shifts.farmId, farmId), gte(shifts.shiftDate, weekStart), lte(shifts.shiftDate, weekEnd)];
+  if (employeeId) conditions.push(eq(shifts.employeeId, employeeId));
+
+  return db
+    .select({
+      id: shifts.id,
+      activityType: shifts.activityType,
+      shiftDate: shifts.shiftDate,
+      startTime: shifts.startTime,
+      endTime: shifts.endTime,
+      status: shifts.status,
+      activityLogId: shifts.activityLogId,
+      employeeId: users.id,
+      employeeName: users.name,
+      employeeAvatarColor: users.avatarColor,
+      employeeAvatarImage: users.avatarImage,
+      fieldId: fields.id,
+      fieldName: fields.name,
+    })
+    .from(shifts)
+    .innerJoin(users, eq(shifts.employeeId, users.id))
+    .leftJoin(fields, eq(shifts.fieldId, fields.id))
+    .where(and(...conditions))
+    .orderBy(asc(shifts.shiftDate));
+}
+
+// Drives the Schedule nav badge — every currently-scheduled (not yet
+// completed) shift assigned to this employee, with no time window and no
+// session-based dismissal. This is a deliberately different definition
+// than the Dashboard badge (today's new activity logs, dismissed per
+// browser tab via sessionStorage — see new-logs-context.tsx): a shift
+// assignment isn't a "today" event, it's a standing to-do, so "how many
+// of my shifts still need action" is the more honest count. See the
+// session's final report for the full reasoning.
+export async function getScheduledShiftCountForEmployee(farmId: string, employeeId: string) {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(shifts)
+    .where(and(eq(shifts.farmId, farmId), eq(shifts.employeeId, employeeId), eq(shifts.status, "scheduled")));
+  return row?.count ?? 0;
+}
+
+// ---------- Audit Manager ----------
+
+const FLAG_ACCURACY_THRESHOLD = 85;
+const FLAG_TAG_NAMES = ["Low Confidence", "Follow-up"];
+
+// Logs that warrant admin attention: unreviewed, and either a low
+// responseAccuracy or carrying one of the flagged tags. Reviewed logs
+// (reviewedAt set) never appear here regardless of accuracy/tags.
+export async function getFlaggedLogsForReview(farmId: string) {
+  const rows = await db
+    .select({
+      id: activityLogs.id,
+      activityType: activityLogs.activityType,
+      logDate: activityLogs.logDate,
+      startTime: activityLogs.startTime,
+      endTime: activityLogs.endTime,
+      transcriptSummary: activityLogs.transcriptSummary,
+      transcriptQA: activityLogs.transcriptQA,
+      responseAccuracy: activityLogs.responseAccuracy,
+      recordedAt: activityLogs.recordedAt,
+      audioDurationSeconds: activityLogs.audioDurationSeconds,
+      employeeId: users.id,
+      employeeName: users.name,
+      employeeAvatarColor: users.avatarColor,
+      fieldId: fields.id,
+      fieldName: fields.name,
+      fieldCenterLat: fields.centerLat,
+      fieldCenterLng: fields.centerLng,
+    })
+    .from(activityLogs)
+    .innerJoin(users, eq(activityLogs.employeeId, users.id))
+    .leftJoin(fields, eq(activityLogs.fieldId, fields.id))
+    .where(and(eq(activityLogs.farmId, farmId), isNull(activityLogs.reviewedAt)))
+    .orderBy(desc(activityLogs.recordedAt));
+
+  const logIds = rows.map((r) => r.id);
+  const tagRows = logIds.length
+    ? await db
+        .select({ logId: activityLogTags.activityLogId, tagId: tags.id, tagName: tags.name })
+        .from(activityLogTags)
+        .innerJoin(tags, eq(activityLogTags.tagId, tags.id))
+        .where(sql`${activityLogTags.activityLogId} IN ${logIds}`)
+    : [];
+  const tagsByLog = new Map<string, { id: string; name: string }[]>();
+  for (const t of tagRows) {
+    const list = tagsByLog.get(t.logId) ?? [];
+    list.push({ id: t.tagId, name: t.tagName });
+    tagsByLog.set(t.logId, list);
+  }
+
+  return rows
+    .map((r) => ({ ...r, tags: tagsByLog.get(r.id) ?? [] }))
+    .filter(
+      (r) =>
+        r.responseAccuracy < FLAG_ACCURACY_THRESHOLD || r.tags.some((t) => FLAG_TAG_NAMES.includes(t.name))
+    );
+}
+
+// Cheap count for the Audit Manager (and Reports — see the session's final
+// report for why Reports reuses this) nav badges. Same flagging rule as
+// getFlaggedLogsForReview, but only selects what's needed to compute it,
+// since this runs on every dashboard page load rather than just the audit
+// queue itself.
+export async function getFlaggedLogCountForReview(farmId: string) {
+  const rows = await db
+    .select({ id: activityLogs.id, responseAccuracy: activityLogs.responseAccuracy })
+    .from(activityLogs)
+    .where(and(eq(activityLogs.farmId, farmId), isNull(activityLogs.reviewedAt)));
+
+  const logIds = rows.map((r) => r.id);
+  const tagRows = logIds.length
+    ? await db
+        .select({ logId: activityLogTags.activityLogId, tagName: tags.name })
+        .from(activityLogTags)
+        .innerJoin(tags, eq(activityLogTags.tagId, tags.id))
+        .where(sql`${activityLogTags.activityLogId} IN ${logIds}`)
+    : [];
+  const flaggedTagLogIds = new Set(
+    tagRows.filter((t) => FLAG_TAG_NAMES.includes(t.tagName)).map((t) => t.logId)
+  );
+
+  return rows.filter((r) => r.responseAccuracy < FLAG_ACCURACY_THRESHOLD || flaggedTagLogIds.has(r.id)).length;
+}
+
+// ---------- Reports ----------
+
+// Raw rows for the selected date range — aggregation (hours per employee,
+// activity-type breakdown, average accuracy) happens in the Reports view
+// itself, since it needs to parse the free-text startTime/endTime the same
+// way src/lib/time.ts already does for the Date & Time Range filter.
+export async function getFarmActivityLogsForReport(farmId: string, startDate: string, endDate: string) {
+  return db
+    .select({
+      id: activityLogs.id,
+      employeeId: users.id,
+      employeeName: users.name,
+      activityType: activityLogs.activityType,
+      startTime: activityLogs.startTime,
+      endTime: activityLogs.endTime,
+      responseAccuracy: activityLogs.responseAccuracy,
+      logDate: activityLogs.logDate,
+    })
+    .from(activityLogs)
+    .innerJoin(users, eq(activityLogs.employeeId, users.id))
+    .where(
+      and(eq(activityLogs.farmId, farmId), gte(activityLogs.logDate, startDate), lte(activityLogs.logDate, endDate))
+    )
+    .orderBy(desc(activityLogs.logDate));
+}
+
+// ---------- Messages (farm-wide announcement board) ----------
+
+export async function getAnnouncementsForFarm(farmId: string) {
+  return db
+    .select({
+      id: announcements.id,
+      body: announcements.body,
+      createdAt: announcements.createdAt,
+      authorId: users.id,
+      authorName: users.name,
+      authorAvatarColor: users.avatarColor,
+      authorAvatarImage: users.avatarImage,
+    })
+    .from(announcements)
+    .innerJoin(users, eq(announcements.authorId, users.id))
+    .where(eq(announcements.farmId, farmId))
+    .orderBy(desc(announcements.createdAt));
+}
+
+// ---------- Direct messages (private 1:1) ----------
+
+export async function getFarmMembersForMessaging(farmId: string, excludeUserId: string) {
+  return db
+    .select({
+      id: users.id,
+      name: users.name,
+      role: users.role,
+      avatarColor: users.avatarColor,
+      avatarImage: users.avatarImage,
+    })
+    .from(users)
+    .where(and(eq(users.farmId, farmId), ne(users.id, excludeUserId)))
+    .orderBy(users.name);
+}
+
+// One row per person this user has exchanged messages with, newest-first,
+// with an unread count scoped to messages THEY sent that this user hasn't
+// opened yet. There's no separate conversation/thread table — a
+// "conversation" is just every direct_messages row between these two
+// userIds, grouped in application code since farm-scale message volume
+// doesn't call for a window-function query.
+export async function getConversationsForUser(farmId: string, userId: string) {
+  const rows = await db
+    .select({
+      senderId: directMessages.senderId,
+      recipientId: directMessages.recipientId,
+      body: directMessages.body,
+      createdAt: directMessages.createdAt,
+      readAt: directMessages.readAt,
+    })
+    .from(directMessages)
+    .where(
+      and(eq(directMessages.farmId, farmId), or(eq(directMessages.senderId, userId), eq(directMessages.recipientId, userId)))
+    )
+    .orderBy(desc(directMessages.createdAt));
+
+  const byOther = new Map<string, { lastBody: string; lastCreatedAt: Date; lastFromMe: boolean; unread: number }>();
+  for (const row of rows) {
+    const otherId = row.senderId === userId ? row.recipientId : row.senderId;
+    const isUnreadForMe = row.recipientId === userId && row.readAt === null;
+    const existing = byOther.get(otherId);
+    if (!existing) {
+      byOther.set(otherId, {
+        lastBody: row.body,
+        lastCreatedAt: row.createdAt,
+        lastFromMe: row.senderId === userId,
+        unread: isUnreadForMe ? 1 : 0,
+      });
+    } else if (isUnreadForMe) {
+      existing.unread += 1;
+    }
+  }
+
+  if (byOther.size === 0) return [];
+
+  const otherIds = Array.from(byOther.keys());
+  const otherUsers = await db
+    .select({ id: users.id, name: users.name, avatarColor: users.avatarColor, avatarImage: users.avatarImage })
+    .from(users)
+    .where(inArray(users.id, otherIds));
+  const userById = new Map(otherUsers.map((u) => [u.id, u]));
+
+  return otherIds
+    .map((id) => {
+      const conv = byOther.get(id);
+      const other = userById.get(id);
+      if (!conv || !other) return null;
+      return {
+        otherUserId: id,
+        otherUserName: other.name,
+        otherUserAvatarColor: other.avatarColor,
+        otherUserAvatarImage: other.avatarImage,
+        lastBody: conv.lastBody,
+        lastCreatedAt: conv.lastCreatedAt,
+        lastFromMe: conv.lastFromMe,
+        unreadCount: conv.unread,
+      };
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null)
+    .sort((a, b) => b.lastCreatedAt.getTime() - a.lastCreatedAt.getTime());
+}
+
+export async function getMessagesBetween(farmId: string, userId: string, otherUserId: string) {
+  return db
+    .select({
+      id: directMessages.id,
+      senderId: directMessages.senderId,
+      recipientId: directMessages.recipientId,
+      body: directMessages.body,
+      createdAt: directMessages.createdAt,
+      readAt: directMessages.readAt,
+    })
+    .from(directMessages)
+    .where(
+      and(
+        eq(directMessages.farmId, farmId),
+        or(
+          and(eq(directMessages.senderId, userId), eq(directMessages.recipientId, otherUserId)),
+          and(eq(directMessages.senderId, otherUserId), eq(directMessages.recipientId, userId))
+        )
+      )
+    )
+    .orderBy(asc(directMessages.createdAt));
+}
+
+// Drives the Messages nav badge.
+export async function getUnreadMessageCountForUser(farmId: string, userId: string) {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(directMessages)
+    .where(
+      and(eq(directMessages.farmId, farmId), eq(directMessages.recipientId, userId), isNull(directMessages.readAt))
+    );
+  return row?.count ?? 0;
 }

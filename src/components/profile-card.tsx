@@ -11,12 +11,18 @@ export function ProfileCard({
   role,
   avatarColor,
   avatarImage,
+  isImpersonating = false,
 }: {
   name: string;
   email: string;
   role: string;
   avatarColor: string | null;
   avatarImage: string | null;
+  // True only while an admin is "viewing as" this employee — editing
+  // someone else's name/photo while spectating is blocked server-side
+  // regardless, but the controls are disabled here too rather than
+  // inviting a click that's just going to fail.
+  isImpersonating?: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarState, avatarAction, avatarPending] = useActionState(updateAvatar, undefined);
@@ -45,7 +51,8 @@ export function ProfileCard({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={avatarPending}
+            disabled={avatarPending || isImpersonating}
+            title={isImpersonating ? "Switch back to your own account to change this." : undefined}
             className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-black text-white hover:bg-zinc-800 disabled:opacity-60"
             aria-label="Change photo"
           >
@@ -67,7 +74,7 @@ export function ProfileCard({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={avatarPending}
+              disabled={avatarPending || isImpersonating}
               className="font-medium text-[#146c44] hover:underline disabled:opacity-60"
             >
               {avatarPending ? "Uploading…" : "Change photo"}
@@ -76,7 +83,7 @@ export function ProfileCard({
               <button
                 type="button"
                 onClick={handleRemove}
-                disabled={isRemoving}
+                disabled={isRemoving || isImpersonating}
                 className="text-[#808080] hover:text-black disabled:opacity-60"
               >
                 {isRemoving ? "Removing…" : "Remove"}
@@ -98,7 +105,8 @@ export function ProfileCard({
             id="profile-name"
             name="name"
             defaultValue={name}
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+            disabled={isImpersonating}
+            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-500"
           />
           {nameState?.errors?.name && <p className="mt-1 text-xs text-red-600">{nameState.errors.name[0]}</p>}
         </div>
@@ -125,7 +133,8 @@ export function ProfileCard({
         )}
         <button
           type="submit"
-          disabled={namePending}
+          disabled={namePending || isImpersonating}
+          title={isImpersonating ? "Switch back to your own account to make changes." : undefined}
           className="rounded-full bg-black px-5 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
         >
           {namePending ? "Saving…" : "Save changes"}

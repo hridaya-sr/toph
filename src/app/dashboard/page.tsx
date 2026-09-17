@@ -50,6 +50,7 @@ export default async function DashboardPage() {
         employees={employees}
         fields={fields}
         employeeMonthStats={employeeMonthStats}
+        isImpersonating={!!user.impersonatedBy}
       />
     </div>
   );

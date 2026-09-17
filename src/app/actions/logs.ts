@@ -4,11 +4,14 @@ import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { activityLogTags, activityLogs, fields, tags, users } from "@/db/schema";
-import { verifySession } from "@/lib/dal";
+import { verifySession, assertNotImpersonating } from "@/lib/dal";
 import { ACTIVITY_TYPES } from "@/lib/definitions";
 import * as z from "zod";
 
-async function assertLogBelongsToFarm(logId: string, farmId: string) {
+// Exported so other action modules that also write activityLogs — namely
+// completeShiftAndCreateLog in src/app/actions/shifts.ts — can reuse the
+// exact same farm-ownership checks instead of re-implementing them.
+export async function assertLogBelongsToFarm(logId: string, farmId: string) {
   const rows = await db
     .select({ id: activityLogs.id })
     .from(activityLogs)
@@ -19,7 +22,7 @@ async function assertLogBelongsToFarm(logId: string, farmId: string) {
   }
 }
 
-async function assertUserBelongsToFarm(userId: string, farmId: string) {
+export async function assertUserBelongsToFarm(userId: string, farmId: string) {
   const rows = await db
     .select({ id: users.id })
     .from(users)
@@ -30,7 +33,7 @@ async function assertUserBelongsToFarm(userId: string, farmId: string) {
   }
 }
 
-async function assertFieldBelongsToFarm(fieldId: string, farmId: string) {
+export async function assertFieldBelongsToFarm(fieldId: string, farmId: string) {
   const rows = await db
     .select({ id: fields.id })
     .from(fields)
@@ -41,8 +44,49 @@ async function assertFieldBelongsToFarm(fieldId: string, farmId: string) {
   }
 }
 
+// The actual activityLogs insert, factored out of createActivityLog so
+// completeShiftAndCreateLog (src/app/actions/shifts.ts) can create a log
+// from a completed shift without duplicating this logic — callers are
+// responsible for their own authorization and farm/field-ownership checks
+// before calling this.
+export async function insertActivityLog(params: {
+  farmId: string;
+  employeeId: string;
+  fieldId: string | null;
+  activityType: (typeof ACTIVITY_TYPES)[number];
+  logDate: string;
+  startTime: string;
+  endTime: string;
+  transcriptSummary: string;
+}) {
+  const [log] = await db
+    .insert(activityLogs)
+    .values({
+      farmId: params.farmId,
+      employeeId: params.employeeId,
+      fieldId: params.fieldId,
+      activityType: params.activityType,
+      logDate: params.logDate,
+      startTime: params.startTime,
+      endTime: params.endTime,
+      audioDurationSeconds: 0,
+      transcriptSummary: params.transcriptSummary,
+      transcriptQA: [
+        {
+          key: "manual_entry",
+          prompt: "Manually entered (no audio recording for this log).",
+          answer: params.transcriptSummary,
+        },
+      ],
+      responseAccuracy: 100,
+    })
+    .returning();
+  return log;
+}
+
 export async function addTagToLog(logId: string, tagName: string) {
   const session = await verifySession();
+  assertNotImpersonating(session);
   const trimmed = tagName.trim();
   if (!trimmed) return;
 
@@ -70,6 +114,7 @@ export async function addTagToLog(logId: string, tagName: string) {
 
 export async function removeTagFromLog(logId: string, tagId: string) {
   const session = await verifySession();
+  assertNotImpersonating(session);
   await assertLogBelongsToFarm(logId, session.farmId);
 
   await db
@@ -99,6 +144,9 @@ export type NewLogState =
 
 export async function createActivityLog(_state: NewLogState, formData: FormData): Promise<NewLogState> {
   const session = await verifySession();
+  if (session.impersonatedBy) {
+    return { message: "You're viewing as this user — switch back to your own account to log work." };
+  }
 
   const parsed = NewLogSchema.safeParse({
     employeeId: formData.get("employeeId"),
@@ -128,7 +176,7 @@ export async function createActivityLog(_state: NewLogState, formData: FormData)
     await assertFieldBelongsToFarm(fieldId, session.farmId);
   }
 
-  await db.insert(activityLogs).values({
+  await insertActivityLog({
     farmId: session.farmId,
     employeeId,
     fieldId: fieldId || null,
@@ -136,21 +184,27 @@ export async function createActivityLog(_state: NewLogState, formData: FormData)
     logDate,
     startTime,
     endTime,
-    audioDurationSeconds: 0,
     transcriptSummary,
-    transcriptQA: [
-      {
-        key: "manual_entry",
-        prompt: "Manually entered by an admin (no audio recording for this log).",
-        answer: transcriptSummary,
-      },
-    ],
-    responseAccuracy: 100,
   });
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/activity-logs");
   return { message: "success" };
+}
+
+// Admin-only: marks a flagged log as reviewed, dropping it out of the
+// Audit Manager queue. Scoped to the admin's own farm, same pattern as
+// every other farm-ownership check in this file.
+export async function markLogReviewed(logId: string) {
+  const session = await verifySession();
+  if (session.role !== "admin") {
+    throw new Error("Only farm admins can review logs.");
+  }
+  await assertLogBelongsToFarm(logId, session.farmId);
+
+  await db.update(activityLogs).set({ reviewedAt: new Date() }).where(eq(activityLogs.id, logId));
+
+  revalidatePath("/dashboard/audit-manager");
 }
 
 // Bulk delete for the activity log table's row-selection toolbar. Scoped
@@ -161,6 +215,7 @@ export async function createActivityLog(_state: NewLogState, formData: FormData)
 // file — there's no separate authorization check to forget to write.
 export async function deleteActivityLogs(logIds: string[]) {
   const session = await verifySession();
+  assertNotImpersonating(session);
   const ids = logIds.filter(Boolean);
   if (ids.length === 0) return;
 

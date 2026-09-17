@@ -56,6 +56,11 @@ export function ActivityLogTable({
   // hidden for those views, shown for admin views where it's the whole
   // point of the column.
   showEmployeeColumn = true,
+  // True only while an admin is "viewing as" someone else — disables bulk
+  // delete and tag editing (real mutations) on top of the server-side
+  // checks in the actions themselves. Mark Read/Unread stays enabled since
+  // that's just this browser tab's own sessionStorage, not a write.
+  isImpersonating = false,
   // When true, `logs` is assumed to already reflect the current sort/
   // month/activity/date-range filters (fetched server-side by the parent —
   // see activity-logs-view.tsx), so this component stops re-filtering and
@@ -79,6 +84,7 @@ export function ActivityLogTable({
   searchQuery?: string;
   viewAllHref?: string;
   showEmployeeColumn?: boolean;
+  isImpersonating?: boolean;
   serverControlled?: boolean;
   sortDir?: "asc" | "desc";
   onSortDirChange?: (dir: "asc" | "desc") => void;
@@ -432,7 +438,8 @@ export function ActivityLogTable({
             </button>
             <button
               onClick={handleDelete}
-              disabled={isDeleting}
+              disabled={isDeleting || isImpersonating}
+              title={isImpersonating ? "Switch back to your own account to delete logs." : undefined}
               className="flex items-center gap-2 rounded-full border border-red-200 bg-white px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
             >
               <Trash2 size={14} />
@@ -482,6 +489,7 @@ export function ActivityLogTable({
               selected={selected.has(log.id)}
               onToggleSelect={() => toggleSelect(log.id)}
               showEmployeeColumn={showEmployeeColumn}
+              isImpersonating={isImpersonating}
             />
           ))}
         </tbody>
@@ -497,6 +505,7 @@ function LogRowItem({
   selected,
   onToggleSelect,
   showEmployeeColumn,
+  isImpersonating,
 }: {
   log: LogRow;
   expanded: boolean;
@@ -504,6 +513,7 @@ function LogRowItem({
   selected: boolean;
   onToggleSelect: () => void;
   showEmployeeColumn: boolean;
+  isImpersonating: boolean;
 }) {
   const { isNew, markSeen } = useNewLogs();
   const isUnseenNew = isNew(log.id);
@@ -551,7 +561,7 @@ function LogRowItem({
       {expanded && (
         <tr className="border-b border-[#f2f2f2] bg-white">
           <td colSpan={showEmployeeColumn ? 7 : 6} className="p-10">
-            <ExpandedEntry log={log} />
+            <ExpandedEntry log={log} isImpersonating={isImpersonating} />
           </td>
         </tr>
       )}
@@ -559,14 +569,14 @@ function LogRowItem({
   );
 }
 
-function ExpandedEntry({ log }: { log: LogRow }) {
+function ExpandedEntry({ log, isImpersonating }: { log: LogRow; isImpersonating: boolean }) {
   const [mapOpen, setMapOpen] = useState(false);
 
   return (
     <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
       <div className="space-y-5">
         <AudioPlayer durationSeconds={log.audioDurationSeconds} />
-        <TagEditor logId={log.id} tags={log.tags} />
+        <TagEditor logId={log.id} tags={log.tags} isImpersonating={isImpersonating} />
         <div className="space-y-1">
           <p className="text-base text-black">Summary</p>
           <p className="text-base leading-relaxed text-black">&ldquo;{log.transcriptSummary}&rdquo;</p>
@@ -687,7 +697,15 @@ function AudioPlayer({ durationSeconds }: { durationSeconds: number }) {
   );
 }
 
-function TagEditor({ logId, tags }: { logId: string; tags: { id: string; name: string }[] }) {
+function TagEditor({
+  logId,
+  tags,
+  isImpersonating,
+}: {
+  logId: string;
+  tags: { id: string; name: string }[];
+  isImpersonating: boolean;
+}) {
   const [adding, setAdding] = useState(false);
   const [value, setValue] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -715,39 +733,42 @@ function TagEditor({ logId, tags }: { logId: string; tags: { id: string; name: s
               className="flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600"
             >
               {tag.name}
-              <button
-                onClick={() => startTransition(async () => removeTagFromLog(logId, tag.id))}
-                className="text-zinc-400 hover:text-zinc-900"
-              >
-                <X size={10} />
-              </button>
+              {!isImpersonating && (
+                <button
+                  onClick={() => startTransition(async () => removeTagFromLog(logId, tag.id))}
+                  className="text-zinc-400 hover:text-zinc-900"
+                >
+                  <X size={10} />
+                </button>
+              )}
             </span>
           ))}
         </div>
       )}
-      {adding ? (
-        <input
-          autoFocus
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={submit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") submit();
-            if (e.key === "Escape") setAdding(false);
-          }}
-          placeholder="Tag name…"
-          className="w-full rounded-lg border border-[#146c44]/10 bg-[#146c44]/10 px-4 py-2.5 text-base text-[#146c44] outline-none placeholder:text-[#146c44]/60"
-        />
-      ) : (
-        <button
-          onClick={() => setAdding(true)}
-          disabled={isPending}
-          className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-[#146c44]/10 bg-[#146c44]/10 py-2.5 text-base text-[#146c44] hover:bg-[#146c44]/[0.15]"
-        >
-          <Star size={16} />
-          Add Tag
-        </button>
-      )}
+      {!isImpersonating &&
+        (adding ? (
+          <input
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={submit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+              if (e.key === "Escape") setAdding(false);
+            }}
+            placeholder="Tag name…"
+            className="w-full rounded-lg border border-[#146c44]/10 bg-[#146c44]/10 px-4 py-2.5 text-base text-[#146c44] outline-none placeholder:text-[#146c44]/60"
+          />
+        ) : (
+          <button
+            onClick={() => setAdding(true)}
+            disabled={isPending}
+            className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-[#146c44]/10 bg-[#146c44]/10 py-2.5 text-base text-[#146c44] hover:bg-[#146c44]/[0.15]"
+          >
+            <Star size={16} />
+            Add Tag
+          </button>
+        ))}
     </div>
   );
 }

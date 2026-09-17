@@ -23,6 +23,7 @@ export default async function SettingsPage() {
           role={user.role}
           avatarColor={user.avatarColor}
           avatarImage={user.avatarImage}
+          isImpersonating={!!user.impersonatedBy}
         />
         {joinCode && <JoinCodeCard joinCode={joinCode} />}
       </div>

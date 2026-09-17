@@ -1,5 +1,29 @@
 import * as z from "zod";
 
+export const ACTIVITY_TYPES = [
+  "spraying",
+  "fertilizing",
+  "planting",
+  "irrigating",
+  "harvesting",
+  "scouting",
+  "pruning",
+  "soil_work",
+  "equipment_maintenance",
+] as const;
+
+export const ACTIVITY_LABELS: Record<(typeof ACTIVITY_TYPES)[number], string> = {
+  spraying: "Spraying",
+  fertilizing: "Fertilizing",
+  planting: "Planting",
+  irrigating: "Irrigation",
+  harvesting: "Harvesting",
+  scouting: "Scouting",
+  pruning: "Pruning",
+  soil_work: "Soil Work",
+  equipment_maintenance: "Equipment Maintenance",
+};
+
 export const LoginFormSchema = z.object({
   email: z.email({ error: "Please enter a valid email." }).trim(),
   password: z.string().min(1, { error: "Password is required." }),
@@ -88,26 +112,63 @@ export type ProfileNameState =
     }
   | undefined;
 
-export const ACTIVITY_TYPES = [
-  "spraying",
-  "fertilizing",
-  "planting",
-  "irrigating",
-  "harvesting",
-  "scouting",
-  "pruning",
-  "soil_work",
-  "equipment_maintenance",
-] as const;
+export const ShiftFormSchema = z.object({
+  employeeId: z.uuid(),
+  fieldId: z.uuid().optional().or(z.literal("")),
+  // Optional — an unset activity is decided by the employee when they
+  // complete the shift instead (see completeShiftAndCreateLog).
+  activityType: z.enum(ACTIVITY_TYPES).optional().or(z.literal("")),
+  shiftDate: z.string().min(1, { error: "Date is required." }),
+  startTime: z.string().min(1, { error: "Start time is required." }),
+  endTime: z.string().min(1, { error: "End time is required." }),
+});
 
-export const ACTIVITY_LABELS: Record<(typeof ACTIVITY_TYPES)[number], string> = {
-  spraying: "Spraying",
-  fertilizing: "Fertilizing",
-  planting: "Planting",
-  irrigating: "Irrigation",
-  harvesting: "Harvesting",
-  scouting: "Scouting",
-  pruning: "Pruning",
-  soil_work: "Soil Work",
-  equipment_maintenance: "Equipment Maintenance",
-};
+export type ShiftFormState =
+  | {
+      errors?: {
+        employeeId?: string[];
+        fieldId?: string[];
+        activityType?: string[];
+        shiftDate?: string[];
+        startTime?: string[];
+        endTime?: string[];
+      };
+      message?: string;
+    }
+  | undefined;
+
+export const AnnouncementFormSchema = z.object({
+  body: z
+    .string()
+    .min(1, { error: "Announcement can't be empty." })
+    .max(2000, { error: "Keep it under 2000 characters." })
+    .trim(),
+});
+
+export type AnnouncementFormState =
+  | {
+      errors?: {
+        body?: string[];
+      };
+      message?: string;
+    }
+  | undefined;
+
+export const DirectMessageSchema = z.object({
+  recipientId: z.uuid(),
+  body: z
+    .string()
+    .min(1, { error: "Message can't be empty." })
+    .max(2000, { error: "Keep it under 2000 characters." })
+    .trim(),
+});
+
+export type DirectMessageState =
+  | {
+      errors?: {
+        recipientId?: string[];
+        body?: string[];
+      };
+      message?: string;
+    }
+  | undefined;

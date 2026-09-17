@@ -22,6 +22,21 @@ export const verifySession = cache(async () => {
   };
 });
 
+// "Switch User" (see switchUser/returnToAdmin in actions/auth.ts) lets an
+// admin see exactly what an employee sees, but that's meant to be read-
+// only spectating, not a way to act as them — an admin should never be
+// able to create a log, complete a shift, or edit a profile "as" someone
+// else just by impersonating them. Every write that's reachable from an
+// employee-role session (as opposed to writes already gated by an
+// explicit role === "admin" check, which impersonation can't bypass
+// anyway since the impersonated session's role is the target user's, not
+// the admin's own) calls this first.
+export function assertNotImpersonating(session: { impersonatedBy: string | null }) {
+  if (session.impersonatedBy) {
+    throw new Error("You're viewing as this user — switch back to your own account to make changes.");
+  }
+}
+
 // Like verifySession, but returns null instead of redirecting.
 // Useful in places (e.g. root page, proxy-adjacent checks) that need to
 // branch on auth state rather than force a redirect.

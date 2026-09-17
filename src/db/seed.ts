@@ -1,13 +1,25 @@
 import "dotenv/config";
 import { db } from "./index";
-import { farms, users, fields, activityLogs, tags, activityLogTags } from "./schema";
+import { farms, users, fields, activityLogs, tags, activityLogTags, shifts, announcements } from "./schema";
 import bcrypt from "bcryptjs";
 import { generateJoinCode } from "../lib/join-code";
+
+// Shifts are meant to read as "this week and next" whenever the app is
+// actually opened, not against a fixed demo date — so every shift date is
+// computed relative to the real current date at seed time.
+function dateOffset(days: number) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 async function main() {
   console.log("Seeding database...");
 
   // Clear existing data (dev convenience — fine for a take-home seed script)
+  await db.delete(announcements);
+  await db.delete(shifts);
   await db.delete(activityLogTags);
   await db.delete(activityLogs);
   await db.delete(tags);
@@ -22,7 +34,7 @@ async function main() {
 
   const passwordHash = await bcrypt.hash("password123", 10);
 
-  const [, isaac, maya, liam, sophia] = await db
+  const [admin, isaac, maya, liam, sophia] = await db
     .insert(users)
     .values([
       { farmId: farm.id, name: "Bays Ranch Admin", email: "admin@baysranch.farm", passwordHash, role: "admin", avatarColor: "#1f2937" },
@@ -176,6 +188,104 @@ async function main() {
           answer: "Field D, all four lines.",
         },
       ],
+    },
+  ]);
+
+  await db.insert(shifts).values([
+    // This week: a mix of already-completed and still-scheduled.
+    {
+      farmId: farm.id,
+      employeeId: isaac.id,
+      fieldId: fieldA.id,
+      shiftDate: dateOffset(-1),
+      startTime: "6:00 AM",
+      endTime: "10:00 AM",
+      status: "completed",
+      createdByAdminId: admin.id,
+    },
+    {
+      farmId: farm.id,
+      employeeId: maya.id,
+      fieldId: fieldB.id,
+      shiftDate: dateOffset(0),
+      startTime: "7:00 AM",
+      endTime: "11:00 AM",
+      status: "scheduled",
+      createdByAdminId: admin.id,
+    },
+    {
+      farmId: farm.id,
+      employeeId: liam.id,
+      fieldId: fieldC.id,
+      shiftDate: dateOffset(0),
+      startTime: "1:00 PM",
+      endTime: "5:00 PM",
+      status: "scheduled",
+      createdByAdminId: admin.id,
+    },
+    {
+      farmId: farm.id,
+      employeeId: sophia.id,
+      fieldId: fieldD.id,
+      shiftDate: dateOffset(2),
+      startTime: "8:00 AM",
+      endTime: "12:00 PM",
+      status: "scheduled",
+      createdByAdminId: admin.id,
+    },
+    {
+      farmId: farm.id,
+      employeeId: isaac.id,
+      fieldId: null,
+      shiftDate: dateOffset(3),
+      startTime: "9:00 AM",
+      endTime: "3:00 PM",
+      status: "scheduled",
+      createdByAdminId: admin.id,
+    },
+    // Next week.
+    {
+      farmId: farm.id,
+      employeeId: maya.id,
+      fieldId: fieldA.id,
+      shiftDate: dateOffset(8),
+      startTime: "6:30 AM",
+      endTime: "10:30 AM",
+      status: "scheduled",
+      createdByAdminId: admin.id,
+    },
+    {
+      farmId: farm.id,
+      employeeId: liam.id,
+      fieldId: fieldB.id,
+      shiftDate: dateOffset(9),
+      startTime: "7:00 AM",
+      endTime: "1:00 PM",
+      status: "scheduled",
+      createdByAdminId: admin.id,
+    },
+    {
+      farmId: farm.id,
+      employeeId: sophia.id,
+      fieldId: fieldC.id,
+      shiftDate: dateOffset(10),
+      startTime: "8:00 AM",
+      endTime: "11:30 AM",
+      status: "scheduled",
+      createdByAdminId: admin.id,
+    },
+  ]);
+
+  await db.insert(announcements).values([
+    {
+      farmId: farm.id,
+      authorId: admin.id,
+      body: "Welcome to the new farm-wide announcement board! Post anything the whole team should see here.",
+    },
+    {
+      farmId: farm.id,
+      authorId: admin.id,
+      body: "Reminder: irrigation lines on Field D are being serviced this week — check with me before scheduling work there.",
     },
   ]);
 

@@ -40,6 +40,7 @@ export function ActivityLogsView({
   fields,
   role,
   filters,
+  isImpersonating,
 }: {
   heading: string;
   subheading: string;
@@ -49,6 +50,7 @@ export function ActivityLogsView({
   fields: { id: string; name: string }[];
   role: "admin" | "employee";
   filters: Filters;
+  isImpersonating: boolean;
 }) {
   const [search, setSearch] = useState("");
   const router = useRouter();
@@ -86,13 +88,14 @@ export function ActivityLogsView({
         </div>
         <div className="flex items-center gap-2.5">
           {role === "admin" ? (
-            <NewLogForm employees={employees} fields={fields} />
+            <NewLogForm employees={employees} fields={fields} disabled={isImpersonating} />
           ) : (
             <NewLogForm
               employees={employees}
               fields={fields}
               triggerLabel="Log New Entry"
               formTitle="Log Your Work"
+              disabled={isImpersonating}
             />
           )}
           <SearchBar value={search} onChange={setSearch} placeholder="Search logs" />
@@ -103,6 +106,7 @@ export function ActivityLogsView({
         title={tableTitle}
         searchQuery={search}
         showEmployeeColumn={role === "admin"}
+        isImpersonating={isImpersonating}
         serverControlled
         sortDir={filters.sort}
         onSortDirChange={(dir) => updateFilters({ sort: dir })}

@@ -24,6 +24,7 @@ export function DashboardView({
   employees,
   fields,
   employeeMonthStats,
+  isImpersonating,
 }: {
   role: "admin" | "employee";
   currentUserId: string;
@@ -34,6 +35,11 @@ export function DashboardView({
   employees: Employee[];
   fields: Field[];
   employeeMonthStats: EmployeeMonthStats | null;
+  // True only while an admin is "viewing as" this employee — that's meant
+  // to be read-only spectating, so every write affordance on this page
+  // gets disabled on top of the server-side check in the actions
+  // themselves. An admin's own (non-impersonated) session is never true.
+  isImpersonating: boolean;
 }) {
   if (role === "admin") {
     return (
@@ -54,6 +60,7 @@ export function DashboardView({
       logs={logs}
       fields={fields}
       monthStats={employeeMonthStats ?? { logsThisMonth: 0, lastLogDate: null }}
+      isImpersonating={isImpersonating}
     />
   );
 }
@@ -104,6 +111,7 @@ function EmployeeDashboard({
   logs,
   fields,
   monthStats,
+  isImpersonating,
 }: {
   currentUserId: string;
   currentUserName: string;
@@ -111,6 +119,7 @@ function EmployeeDashboard({
   logs: LogRow[];
   fields: Field[];
   monthStats: EmployeeMonthStats;
+  isImpersonating: boolean;
 }) {
   const [search, setSearch] = useState("");
 
@@ -140,6 +149,7 @@ function EmployeeDashboard({
           triggerLabel="Log New Entry"
           formTitle="Log Your Work"
           triggerClassName="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-zinc-800"
+          disabled={isImpersonating}
         />
       </div>
 
@@ -162,6 +172,7 @@ function EmployeeDashboard({
         searchQuery={search}
         viewAllHref={ACTIVITY_LOGS_HREF}
         showEmployeeColumn={false}
+        isImpersonating={isImpersonating}
       />
     </>
   );

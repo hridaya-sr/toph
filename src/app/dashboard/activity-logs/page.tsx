@@ -81,6 +81,7 @@ export default async function ActivityLogsPage({ searchParams }: { searchParams:
           rangeStart: filters.rangeStart,
           rangeEnd: filters.rangeEnd,
         }}
+        isImpersonating={!!user.impersonatedBy}
       />
     </div>
   );

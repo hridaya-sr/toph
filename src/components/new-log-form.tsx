@@ -11,12 +11,18 @@ export function NewLogForm({
   triggerLabel = "New Employee Log",
   triggerClassName = "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-black px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800",
   formTitle = "New Employee Log",
+  // "Switch User" is spectator mode — an admin viewing as an employee can
+  // see exactly what they'd see, but shouldn't be able to log work "as"
+  // them. createActivityLog rejects this server-side regardless; this just
+  // keeps the button from inviting a click that's going to fail.
+  disabled = false,
 }: {
   employees: { id: string; name: string }[];
   fields: { id: string; name: string }[];
   triggerLabel?: string;
   triggerClassName?: string;
   formTitle?: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState<NewLogState, FormData>(createActivityLog, undefined);
@@ -34,7 +40,12 @@ export function NewLogForm({
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className={triggerClassName}>
+      <button
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        title={disabled ? "Switch back to your own account to log work." : undefined}
+        className={`${triggerClassName} disabled:cursor-not-allowed disabled:opacity-50`}
+      >
         <Plus size={14} />
         {triggerLabel}
       </button>
