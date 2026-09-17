@@ -7,7 +7,13 @@ export default async function MapPage() {
   const user = await getCurrentUser();
   const [fields, logs] = await Promise.all([
     getFarmFields(user.farmId),
-    getActivityLogsForFarm(user.farmId),
+    // Scoped the same way every other logs list in this app is: an
+    // employee only ever sees their own activity, never a coworker's —
+    // this page's "Recent activity by field" table previously showed every
+    // farm member's named entries to anyone signed in.
+    getActivityLogsForFarm(user.farmId, {
+      employeeId: user.role === "admin" ? undefined : user.id,
+    }),
   ]);
 
   const recentByField = new Map<string, number>();
@@ -19,7 +25,9 @@ export default async function MapPage() {
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
       <h1 className="text-2xl font-semibold text-zinc-900">Map</h1>
-      <p className="mt-1 text-sm text-zinc-500">All fields on {user.farmName}, plotted from logged activity.</p>
+      <p className="mt-1 text-sm text-zinc-500">
+        All fields on {user.farmName}, plotted from {user.role === "admin" ? "logged" : "your logged"} activity.
+      </p>
 
       <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">

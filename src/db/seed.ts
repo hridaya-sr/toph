@@ -2,6 +2,7 @@ import "dotenv/config";
 import { db } from "./index";
 import { farms, users, fields, activityLogs, tags, activityLogTags } from "./schema";
 import bcrypt from "bcryptjs";
+import { generateJoinCode } from "../lib/join-code";
 
 async function main() {
   console.log("Seeding database...");
@@ -16,7 +17,7 @@ async function main() {
 
   const [farm] = await db
     .insert(farms)
-    .values({ name: "Bays Ranch" })
+    .values({ name: "Bays Ranch", joinCode: generateJoinCode() })
     .returning();
 
   const passwordHash = await bcrypt.hash("password123", 10);
@@ -182,6 +183,7 @@ async function main() {
   console.log(`  Farm: ${farm.name}`);
   console.log(`  Users: admin@baysranch.farm / isaac / maya / liam / sophia @baysranch.farm`);
   console.log(`  Password (all seed users): password123`);
+  console.log(`  Farm invite code (for "Join an existing farm" at signup): ${farm.joinCode}`);
 }
 
 main()

@@ -1,8 +1,13 @@
+import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
 import { getFarmEmployees, getActivityLogsForFarm } from "@/lib/queries";
+import { Avatar } from "@/components/avatar";
 
 export default async function EmployeesPage() {
   const user = await getCurrentUser();
+  if (user.role !== "admin") {
+    redirect("/dashboard");
+  }
   const [employees, logs] = await Promise.all([
     getFarmEmployees(user.farmId),
     getActivityLogsForFarm(user.farmId),
@@ -33,16 +38,7 @@ export default async function EmployeesPage() {
               <tr key={e.id} className="border-b border-zinc-50">
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-2">
-                    <span
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold text-white"
-                      style={{ backgroundColor: e.avatarColor ?? "#27272a" }}
-                    >
-                      {e.name
-                        .split(" ")
-                        .map((p) => p[0])
-                        .join("")
-                        .slice(0, 2)}
-                    </span>
+                    <Avatar name={e.name} avatarColor={e.avatarColor} avatarImage={e.avatarImage} size={28} />
                     {e.name}
                   </div>
                 </td>

@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: toph
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - toph_pgdata:/var/lib/postgresql/data
 

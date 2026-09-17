@@ -22,11 +22,15 @@ export function FieldMap({
   focusedFieldId,
   height = 220,
   interactive = true,
+  rounded = 8,
+  borderColor,
 }: {
   fields: { id: string; name: string; centerLat: number | null; centerLng: number | null }[];
   focusedFieldId?: string;
   height?: number;
   interactive?: boolean;
+  rounded?: number;
+  borderColor?: string;
 }) {
   const plotted = fields.filter((f) => f.centerLat != null && f.centerLng != null);
   const focused = plotted.find((f) => f.id === focusedFieldId) ?? plotted[0];
@@ -35,7 +39,10 @@ export function FieldMap({
     : [38.5449, -121.7405];
 
   return (
-    <div style={{ height }} className="w-full overflow-hidden rounded-lg border border-zinc-200">
+    <div
+      style={{ height, borderRadius: rounded, borderColor }}
+      className="w-full overflow-hidden border border-zinc-200"
+    >
       <MapContainer
         center={center}
         zoom={interactive ? 14 : 13}

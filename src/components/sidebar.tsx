@@ -4,51 +4,69 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
-  LayoutDashboard,
-  ClipboardList,
+  ChartLine,
+  AudioLines,
   Map as MapIcon,
-  ShieldCheck,
-  FileBarChart,
-  CalendarClock,
+  BookCheck,
+  Files,
+  Calendar,
   Users,
-  TrendingUp,
-  MessageSquare,
-  Settings,
-  LifeBuoy,
-  ChevronDown,
+  ChartPie,
+  Mail,
+  Cog,
+  Handshake,
+  ArrowRightLeft,
   LogOut,
-  Repeat,
+  UserStar,
+  Inbox,
+  ChevronDown,
 } from "lucide-react";
-import { logout, switchUser } from "@/app/actions/auth";
+import { logout, switchUser, returnToAdmin } from "@/app/actions/auth";
+import { useNewLogs } from "@/components/new-logs-context";
+import { Avatar } from "@/components/avatar";
 
-type NavItem = { label: string; href: string; icon: React.ComponentType<{ size?: number; className?: string }> };
+type NavItem = {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  // Farm-wide management tooling an individual employee has no reason to
+  // see — hidden from their sidebar entirely rather than shown and gated
+  // only by a page-level redirect (that redirect still exists, as defense
+  // in depth, but the point of this flag is presenting the right nav, not
+  // being the only thing standing between an employee and the page).
+  adminOnly?: boolean;
+};
 
-const NAV_GROUPS: { items: NavItem[] }[] = [
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
+    label: "Overview",
     items: [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { label: "Activity Logs", href: "/dashboard/activity-logs", icon: ClipboardList },
+      { label: "Dashboard", href: "/dashboard", icon: ChartLine },
+      { label: "Activity Logs", href: "/dashboard/activity-logs", icon: AudioLines },
       { label: "Map", href: "/dashboard/map", icon: MapIcon },
     ],
   },
   {
+    label: "Compliance",
     items: [
-      { label: "Audit Manager", href: "/dashboard/audit-manager", icon: ShieldCheck },
-      { label: "Reports", href: "/dashboard/reports", icon: FileBarChart },
-      { label: "Schedule", href: "/dashboard/schedule", icon: CalendarClock },
+      { label: "Audit Manager", href: "/dashboard/audit-manager", icon: BookCheck, adminOnly: true },
+      { label: "Reports", href: "/dashboard/reports", icon: Files, adminOnly: true },
+      { label: "Schedule", href: "/dashboard/schedule", icon: Calendar },
     ],
   },
   {
+    label: "Team Management",
     items: [
-      { label: "Employees", href: "/dashboard/employees", icon: Users },
-      { label: "Performance", href: "/dashboard/performance", icon: TrendingUp },
-      { label: "Messages", href: "/dashboard/messages", icon: MessageSquare },
+      { label: "Employees", href: "/dashboard/employees", icon: Users, adminOnly: true },
+      { label: "Performance", href: "/dashboard/performance", icon: ChartPie, adminOnly: true },
+      { label: "Messages", href: "/dashboard/messages", icon: Mail },
     ],
   },
   {
+    label: "Other",
     items: [
-      { label: "Settings", href: "/dashboard/settings", icon: Settings },
-      { label: "Support", href: "/dashboard/support", icon: LifeBuoy },
+      { label: "Settings", href: "/dashboard/settings", icon: Cog },
+      { label: "Support", href: "/dashboard/support", icon: Handshake },
     ],
   },
 ];
@@ -58,101 +76,132 @@ export function Sidebar({
   currentUser,
   otherUsers,
   canSwitchUser,
+  viewingAsAdminName = null,
 }: {
   farmName: string;
-  currentUser: { id: string; name: string; role: string; avatarColor: string | null };
+  currentUser: { id: string; name: string; role: string; avatarColor: string | null; avatarImage: string | null };
   otherUsers: { id: string; name: string; role: string }[];
   canSwitchUser: boolean;
+  viewingAsAdminName?: string | null;
 }) {
   const pathname = usePathname();
+  const { unseenCount } = useNewLogs();
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col justify-between border-r border-zinc-800 bg-zinc-950 text-zinc-300">
+    <aside className="flex h-full w-[280px] shrink-0 flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-2.5 text-black">
       <div>
-        <div className="flex items-center gap-2.5 border-b border-zinc-800 px-4 py-4">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-semibold text-white"
-            style={{ backgroundColor: currentUser.avatarColor ?? "#27272a" }}
+        <div className="flex items-center justify-between gap-2 rounded px-2.5 py-2">
+          <div className="flex items-center gap-3">
+            <Avatar name={currentUser.name} avatarColor={currentUser.avatarColor} avatarImage={currentUser.avatarImage} size={42} />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-black">{farmName}</p>
+              <p className="flex items-center gap-1 truncate text-sm text-[#808080]">
+                <UserStar size={14} className="shrink-0" />
+                <span className="capitalize">{currentUser.role}</span>
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/messages"
+            className="shrink-0 text-[#4d4d4d] hover:text-black"
+            aria-label="Inbox"
           >
-            {farmName
-              .split(" ")
-              .map((w) => w[0])
-              .join("")
-              .slice(0, 2)
-              .toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-white">{farmName}</p>
-            <p className="truncate text-xs capitalize text-zinc-500">{currentUser.role}</p>
-          </div>
+            <Inbox size={16} />
+          </Link>
         </div>
 
-        <nav className="mt-3 flex flex-col gap-4 px-2">
-          {NAV_GROUPS.map((group, i) => (
-            <div key={i} className="flex flex-col gap-0.5">
-              {group.items.map((item) => {
-                const active =
-                  item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors ${
-                      active
-                        ? "bg-white text-zinc-900 font-medium"
-                        : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
-                    }`}
-                  >
-                    <Icon size={16} />
-                    {item.label}
-                  </Link>
-                );
-              })}
-              {i < NAV_GROUPS.length - 1 && <div className="mx-2.5 mt-2 border-t border-zinc-800" />}
-            </div>
-          ))}
+        <nav className="mt-2 flex flex-col gap-1">
+          {NAV_GROUPS.map((group) => {
+            const items = currentUser.role === "admin" ? group.items : group.items.filter((i) => !i.adminOnly);
+            if (items.length === 0) return null;
+            return (
+              <div key={group.label} className="flex flex-col gap-1">
+                <p className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-[#b3b3b3]">
+                  {group.label}
+                </p>
+                {items.map((item) => {
+                  const active =
+                    item.href === "/dashboard" ? pathname === item.href : pathname.startsWith(item.href);
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`flex items-center gap-3.5 rounded px-2.5 py-2.5 text-sm transition-colors ${
+                        active ? "bg-black/5" : "hover:bg-black/[0.03]"
+                      }`}
+                    >
+                      <Icon size={16} className="shrink-0 text-[#4d4d4d]" />
+                      <span className="flex-1 text-black">{item.label}</span>
+                      {item.href === "/dashboard" && unseenCount > 0 && (
+                        <span className="flex h-[18px] min-w-[24px] items-center justify-center rounded-full border border-[#5B9973] bg-[#8CBF9F] px-1.5 text-[11px] font-semibold leading-none tabular-nums text-white">
+                          {unseenCount}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            );
+          })}
         </nav>
       </div>
 
-      <div className="border-t border-zinc-800 p-2">
-        {canSwitchUser && (
-          <div className="relative">
-            <button
-              onClick={() => setSwitcherOpen((v) => !v)}
-              className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
-            >
-              <Repeat size={16} />
-              Switch User
-              <ChevronDown size={14} className="ml-auto" />
-            </button>
-            {switcherOpen && (
-              <div className="absolute bottom-full left-0 mb-1 w-full rounded-md border border-zinc-800 bg-zinc-900 p-1 shadow-lg">
-                {otherUsers.length === 0 && (
-                  <p className="px-2.5 py-1.5 text-xs text-zinc-500">No other accounts on this farm.</p>
-                )}
-                {otherUsers.map((u) => (
-                  <form key={u.id} action={switchUser.bind(null, u.id)}>
-                    <button
-                      type="submit"
-                      className="flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
-                    >
-                      <span>{u.name}</span>
-                      <span className="text-xs capitalize text-zinc-500">{u.role}</span>
-                    </button>
-                  </form>
-                ))}
-              </div>
-            )}
+      <div>
+        {viewingAsAdminName ? (
+          <div className="mb-1">
+            <p className="px-2.5 pb-1.5 text-xs text-[#808080]">
+              Viewing as <span className="font-medium text-black">{currentUser.name}</span>
+            </p>
+            <form action={returnToAdmin}>
+              <button
+                type="submit"
+                className="flex w-full items-center gap-3.5 rounded px-2.5 py-2.5 text-sm text-black hover:bg-black/[0.03]"
+              >
+                <ArrowRightLeft size={16} className="text-[#4d4d4d]" />
+                Switch back to {viewingAsAdminName}
+              </button>
+            </form>
           </div>
+        ) : (
+          canSwitchUser && (
+            <div className="relative">
+              <button
+                onClick={() => setSwitcherOpen((v) => !v)}
+                className="flex w-full items-center gap-3.5 rounded px-2.5 py-2.5 text-sm text-black hover:bg-black/[0.03]"
+              >
+                <ArrowRightLeft size={16} className="text-[#4d4d4d]" />
+                Switch User
+                <ChevronDown size={14} className="ml-auto text-[#4d4d4d]" />
+              </button>
+              {switcherOpen && (
+                <div className="absolute bottom-full left-0 mb-1 w-full rounded-md border border-zinc-200 bg-white p-1 shadow-lg">
+                  {otherUsers.length === 0 && (
+                    <p className="px-2.5 py-1.5 text-xs text-[#808080]">No other accounts on this farm.</p>
+                  )}
+                  {otherUsers.map((u) => (
+                    <form key={u.id} action={switchUser.bind(null, u.id)}>
+                      <button
+                        type="submit"
+                        className="flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left text-sm text-black hover:bg-black/5"
+                      >
+                        <span>{u.name}</span>
+                        <span className="text-xs capitalize text-[#808080]">{u.role}</span>
+                      </button>
+                    </form>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
         )}
         <form action={logout}>
           <button
             type="submit"
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+            className="flex w-full items-center gap-3.5 rounded px-2.5 py-2.5 text-sm text-black hover:bg-black/[0.03]"
           >
-            <LogOut size={16} />
+            <LogOut size={16} className="text-[#4d4d4d]" />
             Log Out
           </button>
         </form>

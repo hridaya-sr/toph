@@ -8,25 +8,35 @@ import { ACTIVITY_LABELS, ACTIVITY_TYPES } from "@/lib/definitions";
 export function NewLogForm({
   employees,
   fields,
+  triggerLabel = "New Employee Log",
+  triggerClassName = "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-black px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800",
+  formTitle = "New Employee Log",
 }: {
   employees: { id: string; name: string }[];
   fields: { id: string; name: string }[];
+  triggerLabel?: string;
+  triggerClassName?: string;
+  formTitle?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState<NewLogState, FormData>(createActivityLog, undefined);
+  // useActionState's state stays "success" forever after the first submit —
+  // it doesn't reset when the form closes — so gating on state alone would
+  // re-close the modal instantly on every subsequent open. Tracking which
+  // state object we've already reacted to (a fresh object identity each
+  // time the action runs) makes the close a one-shot per submission.
+  const [handledState, setHandledState] = useState<NewLogState>(undefined);
 
-  if (state?.message === "success" && open) {
+  if (state?.message === "success" && open && state !== handledState) {
     setOpen(false);
+    setHandledState(state);
   }
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-      >
+      <button onClick={() => setOpen(true)} className={triggerClassName}>
         <Plus size={14} />
-        New Employee Log
+        {triggerLabel}
       </button>
 
       {open && (
@@ -36,7 +46,7 @@ export function NewLogForm({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-semibold text-zinc-900">New Employee Log</p>
+              <p className="text-sm font-semibold text-zinc-900">{formTitle}</p>
               <button onClick={() => setOpen(false)} className="text-zinc-400 hover:text-zinc-900">
                 <X size={18} />
               </button>

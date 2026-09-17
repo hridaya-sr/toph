@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SignupForm } from "@/components/auth-forms";
+import { SignupTabs } from "@/components/auth-forms";
 
 export default function SignupPage() {
   return (
@@ -9,12 +9,9 @@ export default function SignupPage() {
           <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-900 text-white font-semibold">
             T
           </div>
-          <h1 className="text-xl font-semibold text-zinc-900">Set up your farm</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Creates a new farm and an admin account.
-          </p>
+          <h1 className="text-xl font-semibold text-zinc-900">Get started with Toph</h1>
         </div>
-        <SignupForm />
+        <SignupTabs />
         <p className="mt-6 text-center text-sm text-zinc-500">
           Already have an account?{" "}
           <Link href="/login" className="font-medium text-zinc-900 underline underline-offset-2">

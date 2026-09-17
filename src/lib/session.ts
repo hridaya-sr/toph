@@ -7,6 +7,10 @@ export type SessionPayload = {
   farmId: string;
   role: "admin" | "employee";
   expiresAt: number; // epoch ms
+  // Set when this session was created via "Switch User" — the userId of the
+  // admin who switched into this account, so the UI can offer a way back
+  // without re-authenticating.
+  impersonatedBy?: string;
 };
 
 const secretKey = process.env.AUTH_SECRET;
@@ -42,6 +46,7 @@ export async function createSession(user: {
   id: string;
   farmId: string;
   role: "admin" | "employee";
+  impersonatedBy?: string;
 }) {
   const expiresAt = Date.now() + SESSION_TTL_MS;
   const token = await encrypt({
@@ -49,6 +54,7 @@ export async function createSession(user: {
     farmId: user.farmId,
     role: user.role,
     expiresAt,
+    ...(user.impersonatedBy ? { impersonatedBy: user.impersonatedBy } : {}),
   });
 
   const cookieStore = await cookies();

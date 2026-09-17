@@ -18,6 +18,7 @@ export const verifySession = cache(async () => {
     userId: session.userId,
     farmId: session.farmId,
     role: session.role,
+    impersonatedBy: session.impersonatedBy ?? null,
   };
 });
 
@@ -45,6 +46,7 @@ export const getCurrentUser = cache(async () => {
       email: users.email,
       role: users.role,
       avatarColor: users.avatarColor,
+      avatarImage: users.avatarImage,
       farmId: users.farmId,
       farmName: farms.name,
     })
@@ -58,5 +60,5 @@ export const getCurrentUser = cache(async () => {
     redirect("/login");
   }
 
-  return user;
+  return { ...user, impersonatedBy: session.impersonatedBy };
 });

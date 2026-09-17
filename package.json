@@ -16,6 +16,7 @@
     "date-fns": "^4.4.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
+    "geist": "^1.7.2",
     "jose": "^6.2.12",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.46.0",

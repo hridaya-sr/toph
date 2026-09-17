@@ -34,6 +34,12 @@ export const activityTypeEnum = pgEnum("activity_type", [
 export const farms = pgTable("farms", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
+  // The invite code employees use to self-serve join this farm at signup.
+  // Always generated application-side with a CSPRNG (see src/lib/join-
+  // code.ts) on both farm creation and regeneration — every insert supplies
+  // it explicitly, the same convention as passwordHash and other app-
+  // generated columns in this schema, so there's no DB-level default.
+  joinCode: varchar("join_code", { length: 20 }).notNull().unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -47,6 +53,13 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: roleEnum("role").notNull().default("employee"),
   avatarColor: varchar("avatar_color", { length: 32 }).default("#111111"),
+  // A data URL (image bytes, base64-encoded) for an uploaded profile photo.
+  // Null means "no photo uploaded" — every avatar-rendering spot falls back
+  // to the colored-initials circle (avatarColor) in that case. Stored
+  // directly in Postgres rather than an external object store, since none
+  // is configured for this app; uploads are capped client- and server-side
+  // (see MAX_AVATAR_BYTES in src/app/actions/profile.ts) to keep rows small.
+  avatarImage: text("avatar_image"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

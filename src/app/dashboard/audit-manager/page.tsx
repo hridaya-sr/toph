@@ -1,6 +1,12 @@
+import { redirect } from "next/navigation";
+import { verifySession } from "@/lib/dal";
 import { ComingSoon } from "@/components/coming-soon";
 
-export default function AuditManagerPage() {
+export default async function AuditManagerPage() {
+  const session = await verifySession();
+  if (session.role !== "admin") {
+    redirect("/dashboard");
+  }
   return (
     <ComingSoon
       title="Audit Manager"
