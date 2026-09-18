@@ -18,8 +18,8 @@ docker compose up && npm install && npm run db:push && npm run db:seed && npm ru
 
 Then sign in at `http://localhost:3000/login` with:
 
-- **admin@baysranch.farm / password123** (admin)
-- or `isaac` / `maya` / `liam` / `sophia` `@baysranch.farm` (employees) — same password
+- **priya@sunrisevalley.farm / password123** (admin)
+- or `isaac` / `grace` / `liam` / `sophia` `@sunrisevalley.farm` (employees) — same password
 
 `npm run db:seed` gives you a minimal, hand-authored dataset (one farm, five accounts, a handful of logs/shifts/announcements) — enough to sanity-check that each feature works. If you want something closer to a real farm — **13 accounts, ~2 weeks of non-uniform activity logs, DM/announcement read state, a populated schedule** — run `npm run db:seed:demo` instead (same commands otherwise; it prints its own login list and password on completion). Use the minimal seed for a quick functional check; use the demo seed when you want Performance, Reports, or the notification badges to show real trends instead of a handful of rows.
 
