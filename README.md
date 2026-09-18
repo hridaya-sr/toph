@@ -53,6 +53,3 @@ Every sidebar section is real and DB-backed except one:
 
 **Transcript modeled as structured Q&A (jsonb) instead of a text blob.** `transcriptQA` is an array of `{ key, prompt, answer }` triples alongside a separate free-text `transcriptSummary`. The product's value is "voice log → structured farm record," not "voice log → paragraph" — Audit Manager and the log detail view need to show exactly what was asked and answered (which chemical, what rate) and flag a specific low-confidence answer, not the whole blob. Storing it structured from the start means the UI renders Q&A pairs directly, with no second parsing pass over free text.
 
-## Testing/verification
-
-The core admin flow — login → expand a log row → add a tag → reload → tag persists → create a new log → dashboard stats update live → logout — was verified end-to-end against the real (seeded) database, not just eyeballed in isolation.
