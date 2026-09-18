@@ -99,7 +99,14 @@ function AdminDashboard({
         />
       </div>
 
-      <ActivityLogTable logs={logs} title="New Employee Logs" searchQuery={search} viewAllHref={ACTIVITY_LOGS_HREF} />
+      <ActivityLogTable
+        logs={logs}
+        title="New Employee Logs"
+        searchQuery={search}
+        viewAllHref={ACTIVITY_LOGS_HREF}
+        employees={employees}
+        fields={fields}
+      />
     </>
   );
 }
@@ -173,6 +180,7 @@ function EmployeeDashboard({
         viewAllHref={ACTIVITY_LOGS_HREF}
         showEmployeeColumn={false}
         isImpersonating={isImpersonating}
+        fields={fields}
       />
     </>
   );

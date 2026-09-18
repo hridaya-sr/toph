@@ -9,6 +9,8 @@ import { ActivityLogTable, LogRow, DateTimeRange } from "@/components/activity-l
 
 type Filters = {
   activity?: string;
+  employeeId?: string;
+  fieldId?: string;
   sort: "asc" | "desc";
   month: boolean;
   rangeStart?: string;
@@ -64,6 +66,8 @@ export function ActivityLogsView({
   const updateFilters = (patch: Record<string, string | null>) => {
     const params = new URLSearchParams();
     if (filters.activity) params.set("activity", filters.activity);
+    if (filters.employeeId) params.set("employeeId", filters.employeeId);
+    if (filters.fieldId) params.set("fieldId", filters.fieldId);
     params.set("sort", filters.sort);
     if (filters.month) params.set("month", "this");
     if (filters.rangeStart) params.set("rangeStart", filters.rangeStart);
@@ -114,6 +118,12 @@ export function ActivityLogsView({
         onThisMonthChange={(value) => updateFilters({ month: value ? "this" : null })}
         activityFilter={filters.activity ?? "all"}
         onActivityFilterChange={(value) => updateFilters({ activity: value === "all" ? null : value })}
+        employees={employees}
+        fields={fields}
+        employeeFilter={filters.employeeId ?? "all"}
+        onEmployeeFilterChange={(value) => updateFilters({ employeeId: value === "all" ? null : value })}
+        fieldFilter={filters.fieldId ?? "all"}
+        onFieldFilterChange={(value) => updateFilters({ fieldId: value === "all" ? null : value })}
         dateRangeFilter={dateRangeFilter}
         onDateRangeChange={(range) =>
           updateFilters(

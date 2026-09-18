@@ -6,6 +6,7 @@ import {
   activityLogs,
   activityLogTags,
   announcements,
+  announcementReads,
   directMessages,
   farms,
   fields,
@@ -21,6 +22,7 @@ export type ActivityLogFilters = {
   // pattern used across this file) rather than the whole farm.
   employeeId?: string;
   activityType?: (typeof ACTIVITY_TYPES)[number];
+  fieldId?: string;
   // Inclusive SQL-level date bounds (YYYY-MM-DD) — covers both "This Month"
   // and the date portion of the Date & Time Range filter.
   startDate?: string;
@@ -41,6 +43,7 @@ export async function getActivityLogsForFarm(farmId: string, filters: ActivityLo
   const conditions = [eq(activityLogs.farmId, farmId)];
   if (filters.employeeId) conditions.push(eq(activityLogs.employeeId, filters.employeeId));
   if (filters.activityType) conditions.push(eq(activityLogs.activityType, filters.activityType));
+  if (filters.fieldId) conditions.push(eq(activityLogs.fieldId, filters.fieldId));
   if (filters.startDate) conditions.push(gte(activityLogs.logDate, filters.startDate));
   if (filters.endDate) conditions.push(lte(activityLogs.logDate, filters.endDate));
 
@@ -422,7 +425,10 @@ export async function getFarmActivityLogsForReport(farmId: string, startDate: st
 
 // ---------- Messages (farm-wide announcement board) ----------
 
-export async function getAnnouncementsForFarm(farmId: string) {
+// readAt here is THIS viewer's own read state (from the announcementReads
+// join table), not a farm-wide property of the announcement — the same
+// announcement row is unread for one viewer and read for another.
+export async function getAnnouncementsForFarm(farmId: string, viewerId: string) {
   return db
     .select({
       id: announcements.id,
@@ -432,11 +438,29 @@ export async function getAnnouncementsForFarm(farmId: string) {
       authorName: users.name,
       authorAvatarColor: users.avatarColor,
       authorAvatarImage: users.avatarImage,
+      readAt: announcementReads.readAt,
     })
     .from(announcements)
     .innerJoin(users, eq(announcements.authorId, users.id))
+    .leftJoin(
+      announcementReads,
+      and(eq(announcementReads.announcementId, announcements.id), eq(announcementReads.userId, viewerId))
+    )
     .where(eq(announcements.farmId, farmId))
     .orderBy(desc(announcements.createdAt));
+}
+
+// Drives the Announcements tab badge.
+export async function getUnreadAnnouncementCountForUser(farmId: string, userId: string) {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(announcements)
+    .leftJoin(
+      announcementReads,
+      and(eq(announcementReads.announcementId, announcements.id), eq(announcementReads.userId, userId))
+    )
+    .where(and(eq(announcements.farmId, farmId), isNull(announcementReads.readAt)));
+  return row?.count ?? 0;
 }
 
 // ---------- Direct messages (private 1:1) ----------
@@ -545,7 +569,9 @@ export async function getMessagesBetween(farmId: string, userId: string, otherUs
     .orderBy(asc(directMessages.createdAt));
 }
 
-// Drives the Messages nav badge.
+// Unread direct-message count only — drives the Direct Messages tab badge,
+// and is combined with getUnreadAnnouncementCountForUser for the Messages
+// nav badge in the sidebar (see dashboard/layout.tsx).
 export async function getUnreadMessageCountForUser(farmId: string, userId: string) {
   const [row] = await db
     .select({ count: sql<number>`count(*)::int` })
@@ -554,4 +580,46 @@ export async function getUnreadMessageCountForUser(farmId: string, userId: strin
       and(eq(directMessages.farmId, farmId), eq(directMessages.recipientId, userId), isNull(directMessages.readAt))
     );
   return row?.count ?? 0;
+}
+
+// ---------- Performance ----------
+
+// Raw rows for the selected date range — weekly bucketing (hours per week,
+// accuracy per week) happens in PerformanceView, the same reason
+// getFarmActivityLogsForReport pushes it to application code: startTime/
+// endTime are free text, not a real time column, so they need
+// parseTimeToMinutes (src/lib/time.ts) rather than SQL date math.
+export async function getActivityLogsForPerformance(farmId: string, startDate: string, endDate: string) {
+  return db
+    .select({
+      employeeId: users.id,
+      employeeName: users.name,
+      startTime: activityLogs.startTime,
+      endTime: activityLogs.endTime,
+      responseAccuracy: activityLogs.responseAccuracy,
+      logDate: activityLogs.logDate,
+    })
+    .from(activityLogs)
+    .innerJoin(users, eq(activityLogs.employeeId, users.id))
+    .where(
+      and(eq(activityLogs.farmId, farmId), gte(activityLogs.logDate, startDate), lte(activityLogs.logDate, endDate))
+    )
+    .orderBy(asc(activityLogs.logDate));
+}
+
+// Same shape/reasoning as getActivityLogsForPerformance, but for shifts —
+// drives the "coverage" trend (completed vs scheduled shifts per week) and
+// the per-employee breakdown table on the Performance page.
+export async function getShiftsForPerformance(farmId: string, startDate: string, endDate: string) {
+  return db
+    .select({
+      employeeId: users.id,
+      employeeName: users.name,
+      shiftDate: shifts.shiftDate,
+      status: shifts.status,
+    })
+    .from(shifts)
+    .innerJoin(users, eq(shifts.employeeId, users.id))
+    .where(and(eq(shifts.farmId, farmId), gte(shifts.shiftDate, startDate), lte(shifts.shiftDate, endDate)))
+    .orderBy(asc(shifts.shiftDate));
 }

@@ -172,6 +172,25 @@ export const announcements = pgTable("announcements", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Per-viewer read state for announcements. Announcements themselves are
+// farm-wide and have no per-recipient row (unlike directMessages, which can
+// hang a readAt column directly off each message), so this is a separate
+// join table: a row's presence means that user has read that announcement.
+// "Mark as unread" deletes the row rather than nulling a column.
+export const announcementReads = pgTable(
+  "announcement_reads",
+  {
+    announcementId: uuid("announcement_id")
+      .references(() => announcements.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.announcementId, t.userId] })]
+);
+
 // Private, 1:1 messages between any two members of the same farm — the
 // real feature the announcement board explicitly wasn't (see the comment
 // on Messages in src/app/dashboard/messages/page.tsx). A "conversation" is
@@ -237,9 +256,18 @@ export const shiftsRelations = relations(shifts, ({ one }) => ({
   activityLog: one(activityLogs, { fields: [shifts.activityLogId], references: [activityLogs.id] }),
 }));
 
-export const announcementsRelations = relations(announcements, ({ one }) => ({
+export const announcementsRelations = relations(announcements, ({ one, many }) => ({
   farm: one(farms, { fields: [announcements.farmId], references: [farms.id] }),
   author: one(users, { fields: [announcements.authorId], references: [users.id] }),
+  reads: many(announcementReads),
+}));
+
+export const announcementReadsRelations = relations(announcementReads, ({ one }) => ({
+  announcement: one(announcements, {
+    fields: [announcementReads.announcementId],
+    references: [announcements.id],
+  }),
+  user: one(users, { fields: [announcementReads.userId], references: [users.id] }),
 }));
 
 export const directMessagesRelations = relations(directMessages, ({ one }) => ({

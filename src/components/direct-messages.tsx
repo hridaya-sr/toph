@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { format } from "date-fns";
-import { sendDirectMessage, markConversationRead } from "@/app/actions/messages";
+import { Mail, MailOpen } from "lucide-react";
+import { sendDirectMessage, markConversationRead, markConversationUnread } from "@/app/actions/messages";
 import { Avatar } from "@/components/avatar";
 
 export type Conversation = {
@@ -46,6 +47,17 @@ export function DirectMessages({
   const router = useRouter();
   const pathname = usePathname();
   const [showPicker, setShowPicker] = useState(false);
+  const [isTogglingRead, startToggleReadTransition] = useTransition();
+
+  const toggleConversationRead = (otherUserId: string, isUnread: boolean) => {
+    startToggleReadTransition(async () => {
+      if (isUnread) {
+        await markConversationRead(otherUserId);
+      } else {
+        await markConversationUnread(otherUserId);
+      }
+    });
+  };
 
   // Opening a conversation marks the other person's messages read — this
   // is a real write (readAt), so it's a server action call, not something
@@ -102,35 +114,50 @@ export function DirectMessages({
         <div className="flex-1 overflow-y-auto">
           {conversations.length === 0 && <p className="p-4 text-center text-xs text-zinc-400">No conversations yet.</p>}
           {conversations.map((c) => (
-            <button
+            <div
               key={c.otherUserId}
-              type="button"
-              onClick={() => selectConversation(c.otherUserId)}
-              className={`flex w-full items-start gap-2.5 border-b border-[#f2f2f2] px-3 py-3 text-left hover:bg-zinc-50 ${
+              className={`group flex w-full items-start gap-1 border-b border-[#f2f2f2] pl-3 pr-1.5 py-3 hover:bg-zinc-50 ${
                 c.otherUserId === selectedUserId ? "bg-zinc-50" : ""
               }`}
             >
-              <Avatar
-                name={c.otherUserName}
-                avatarColor={c.otherUserAvatarColor}
-                avatarImage={c.otherUserAvatarImage}
-                size={32}
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-sm font-medium text-black">{c.otherUserName}</p>
-                  {c.unreadCount > 0 && (
-                    <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-semibold text-white">
-                      {c.unreadCount}
-                    </span>
-                  )}
+              <button
+                type="button"
+                onClick={() => selectConversation(c.otherUserId)}
+                className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+              >
+                <Avatar
+                  name={c.otherUserName}
+                  avatarColor={c.otherUserAvatarColor}
+                  avatarImage={c.otherUserAvatarImage}
+                  size={32}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-medium text-black">{c.otherUserName}</p>
+                    {c.unreadCount > 0 && (
+                      <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-semibold text-white">
+                        {c.unreadCount}
+                      </span>
+                    )}
+                  </div>
+                  <p className="truncate text-xs text-zinc-500">
+                    {c.lastFromMe ? "You: " : ""}
+                    {c.lastBody}
+                  </p>
                 </div>
-                <p className="truncate text-xs text-zinc-500">
-                  {c.lastFromMe ? "You: " : ""}
-                  {c.lastBody}
-                </p>
-              </div>
-            </button>
+              </button>
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={() => toggleConversationRead(c.otherUserId, c.unreadCount > 0)}
+                  disabled={isTogglingRead}
+                  title={c.unreadCount > 0 ? "Mark as read" : "Mark as unread"}
+                  className="mt-0.5 shrink-0 rounded-full p-1.5 text-zinc-400 opacity-0 hover:bg-zinc-100 hover:text-zinc-600 group-hover:opacity-100 disabled:opacity-60"
+                >
+                  {c.unreadCount > 0 ? <MailOpen size={14} /> : <Mail size={14} />}
+                </button>
+              )}
+            </div>
           ))}
         </div>
       </div>

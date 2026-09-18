@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChartLine,
   AudioLines,
@@ -89,7 +89,6 @@ export function Sidebar({
   scheduledShiftCount = 0,
   flaggedLogCount = 0,
   unreadMessageCount = 0,
-  newEmployeeCount = 0,
 }: {
   farmName: string;
   currentUser: { id: string; name: string; role: string; avatarColor: string | null; avatarImage: string | null };
@@ -102,29 +101,33 @@ export function Sidebar({
   // (shifts aren't assigned to them), so the badge never renders there.
   scheduledShiftCount?: number;
   // Unreviewed logs needing admin attention (see getFlaggedLogCountForReview).
-  // Shown on BOTH Audit Manager and Reports — Reports has no natural "new
-  // item" concept of its own, and the two already share the Compliance nav
-  // group, so this is the most defensible single number to reuse rather
-  // than inventing a second, less-grounded metric. Always 0 for an
-  // employee (both tabs are admin-only, hidden from their nav entirely).
+  // Shown on Audit Manager only. Always 0 for an employee (admin-only,
+  // hidden from their nav entirely).
   flaggedLogCount?: number;
   // Direct messages sent to this person that they haven't opened yet.
   unreadMessageCount?: number;
-  // Employees (not admins) who joined the farm today — admin-only, always
-  // 0 for an employee session.
-  newEmployeeCount?: number;
 }) {
   const pathname = usePathname();
   const { unseenCount } = useNewLogs();
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const switcherRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!switcherOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (switcherRef.current && !switcherRef.current.contains(e.target as Node)) {
+        setSwitcherOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [switcherOpen]);
 
   const badgeCountByHref: Record<string, number> = {
     "/dashboard": unseenCount,
     "/dashboard/schedule": scheduledShiftCount,
     "/dashboard/audit-manager": flaggedLogCount,
-    "/dashboard/reports": flaggedLogCount,
     "/dashboard/messages": unreadMessageCount,
-    "/dashboard/employees": newEmployeeCount,
   };
 
   return (
@@ -201,13 +204,13 @@ export function Sidebar({
           </div>
         ) : (
           canSwitchUser && (
-            <div className="relative">
+            <div className="relative" ref={switcherRef}>
               <button
                 onClick={() => setSwitcherOpen((v) => !v)}
                 className="flex w-full items-center gap-3.5 rounded px-2.5 py-2.5 text-sm text-black hover:bg-black/[0.03]"
               >
                 <ArrowRightLeft size={16} className="text-[#4d4d4d]" />
-                Switch User
+                Switch to Employee View
                 <ChevronDown size={14} className="ml-auto text-[#4d4d4d]" />
               </button>
               {switcherOpen && (

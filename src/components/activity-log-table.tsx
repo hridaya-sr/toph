@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { format, parseISO, isSameMonth } from "date-fns";
-import { Play, Pause, Star, X, Expand, ListFilter, Funnel, AudioLines, Mail, MailOpen, Trash2, CalendarClock } from "lucide-react";
+import { Play, Pause, Star, X, Expand, ListFilter, Funnel, AudioLines, Mail, MailOpen, Trash2, CalendarClock, User, MapPin } from "lucide-react";
 import { ACTIVITY_LABELS, ACTIVITY_TYPES } from "@/lib/definitions";
 import { addTagToLog, removeTagFromLog, deleteActivityLogs } from "@/app/actions/logs";
 import { FieldMap } from "@/components/field-map-loader";
@@ -76,6 +76,15 @@ export function ActivityLogTable({
   onThisMonthChange,
   activityFilter: controlledActivityFilter,
   onActivityFilterChange,
+  // Options for the Employee/Field filter dropdowns — the Employee one only
+  // renders when showEmployeeColumn is also true (filtering by employee is
+  // meaningless on a view that's already scoped to one person's own logs).
+  employees = [],
+  fields = [],
+  employeeFilter: controlledEmployeeFilter,
+  onEmployeeFilterChange,
+  fieldFilter: controlledFieldFilter,
+  onFieldFilterChange,
   dateRangeFilter: controlledDateRangeFilter,
   onDateRangeChange,
 }: {
@@ -92,6 +101,12 @@ export function ActivityLogTable({
   onThisMonthChange?: (value: boolean) => void;
   activityFilter?: string;
   onActivityFilterChange?: (value: string) => void;
+  employees?: { id: string; name: string }[];
+  fields?: { id: string; name: string }[];
+  employeeFilter?: string;
+  onEmployeeFilterChange?: (value: string) => void;
+  fieldFilter?: string;
+  onFieldFilterChange?: (value: string) => void;
   dateRangeFilter?: DateTimeRange | null;
   onDateRangeChange?: (range: DateTimeRange | null) => void;
 }) {
@@ -99,8 +114,12 @@ export function ActivityLogTable({
   const [localSortDir, setLocalSortDir] = useState<"desc" | "asc">("asc");
   const [localThisMonthOnly, setLocalThisMonthOnly] = useState(false);
   const [localActivityFilter, setLocalActivityFilter] = useState<string>("all");
+  const [localEmployeeFilter, setLocalEmployeeFilter] = useState<string>("all");
+  const [localFieldFilter, setLocalFieldFilter] = useState<string>("all");
   const [localDateRangeFilter, setLocalDateRangeFilter] = useState<DateTimeRange | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [employeeFilterOpen, setEmployeeFilterOpen] = useState(false);
+  const [fieldFilterOpen, setFieldFilterOpen] = useState(false);
   const [dateRangeOpen, setDateRangeOpen] = useState(false);
   const dateRangeButtonRef = useRef<HTMLButtonElement>(null);
   // The card this toolbar lives in clips overflow so its rounded corners
@@ -123,6 +142,8 @@ export function ActivityLogTable({
   const sortDir = serverControlled ? (controlledSortDir ?? "desc") : localSortDir;
   const thisMonthOnly = serverControlled ? (controlledThisMonthOnly ?? false) : localThisMonthOnly;
   const activityFilter = serverControlled ? (controlledActivityFilter ?? "all") : localActivityFilter;
+  const employeeFilter = serverControlled ? (controlledEmployeeFilter ?? "all") : localEmployeeFilter;
+  const fieldFilter = serverControlled ? (controlledFieldFilter ?? "all") : localFieldFilter;
   const dateRangeFilter = serverControlled ? (controlledDateRangeFilter ?? null) : localDateRangeFilter;
 
   const handleSortToggle = () => {
@@ -143,6 +164,18 @@ export function ActivityLogTable({
     setFilterOpen(false);
   };
 
+  const handleEmployeeFilterSelect = (value: string) => {
+    if (serverControlled) onEmployeeFilterChange?.(value);
+    else setLocalEmployeeFilter(value);
+    setEmployeeFilterOpen(false);
+  };
+
+  const handleFieldFilterSelect = (value: string) => {
+    if (serverControlled) onFieldFilterChange?.(value);
+    else setLocalFieldFilter(value);
+    setFieldFilterOpen(false);
+  };
+
   const filtered = useMemo(() => {
     let rows = [...logs];
     if (!serverControlled) {
@@ -152,6 +185,12 @@ export function ActivityLogTable({
       }
       if (activityFilter !== "all") {
         rows = rows.filter((r) => r.activityType === activityFilter);
+      }
+      if (employeeFilter !== "all") {
+        rows = rows.filter((r) => r.employeeId === employeeFilter);
+      }
+      if (fieldFilter !== "all") {
+        rows = rows.filter((r) => r.fieldId === fieldFilter);
       }
       if (dateRangeFilter) {
         const start = combineDateTime(dateRangeFilter.startDate, dateRangeFilter.startTime);
@@ -181,7 +220,7 @@ export function ActivityLogTable({
       });
     }
     return rows;
-  }, [logs, thisMonthOnly, activityFilter, dateRangeFilter, sortDir, searchQuery, serverControlled]);
+  }, [logs, thisMonthOnly, activityFilter, employeeFilter, fieldFilter, dateRangeFilter, sortDir, searchQuery, serverControlled]);
 
   const visible = filtered;
   // Only meaningful as a live preview count when filtering happens locally
@@ -303,7 +342,7 @@ export function ActivityLogTable({
               className="flex items-center gap-2.5 rounded-full border border-[#e6e6e6] bg-white px-4 py-2 text-sm text-[#4d4d4d]"
             >
               <Funnel size={14} />
-              Filter
+              Activity
             </button>
             {filterOpen && (
               <div className="absolute right-0 z-10 mt-1 w-44 rounded-md border border-zinc-200 bg-white p-1 shadow-lg">
@@ -329,6 +368,78 @@ export function ActivityLogTable({
               </div>
             )}
           </div>
+          {showEmployeeColumn && employees.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setEmployeeFilterOpen((v) => !v)}
+                className={`flex items-center gap-2.5 rounded-full px-4 py-2 text-sm transition-colors ${
+                  employeeFilter !== "all" ? "bg-black text-white" : "border border-[#e6e6e6] bg-white text-[#4d4d4d]"
+                }`}
+              >
+                <User size={14} />
+                {employeeFilter !== "all" ? (employees.find((e) => e.id === employeeFilter)?.name ?? "Employee") : "Employee"}
+              </button>
+              {employeeFilterOpen && (
+                <div className="absolute right-0 z-10 mt-1 max-h-64 w-48 overflow-y-auto rounded-md border border-zinc-200 bg-white p-1 shadow-lg">
+                  <button
+                    onClick={() => handleEmployeeFilterSelect("all")}
+                    className={`block w-full rounded px-2 py-1.5 text-left text-xs ${
+                      employeeFilter === "all" ? "bg-zinc-100 font-medium" : "hover:bg-zinc-50"
+                    }`}
+                  >
+                    All employees
+                  </button>
+                  {employees.map((e) => (
+                    <button
+                      key={e.id}
+                      onClick={() => handleEmployeeFilterSelect(e.id)}
+                      className={`block w-full rounded px-2 py-1.5 text-left text-xs ${
+                        employeeFilter === e.id ? "bg-zinc-100 font-medium" : "hover:bg-zinc-50"
+                      }`}
+                    >
+                      {e.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {fields.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setFieldFilterOpen((v) => !v)}
+                className={`flex items-center gap-2.5 rounded-full px-4 py-2 text-sm transition-colors ${
+                  fieldFilter !== "all" ? "bg-black text-white" : "border border-[#e6e6e6] bg-white text-[#4d4d4d]"
+                }`}
+              >
+                <MapPin size={14} />
+                {fieldFilter !== "all" ? (fields.find((f) => f.id === fieldFilter)?.name ?? "Field") : "Field"}
+              </button>
+              {fieldFilterOpen && (
+                <div className="absolute right-0 z-10 mt-1 max-h-64 w-48 overflow-y-auto rounded-md border border-zinc-200 bg-white p-1 shadow-lg">
+                  <button
+                    onClick={() => handleFieldFilterSelect("all")}
+                    className={`block w-full rounded px-2 py-1.5 text-left text-xs ${
+                      fieldFilter === "all" ? "bg-zinc-100 font-medium" : "hover:bg-zinc-50"
+                    }`}
+                  >
+                    All fields
+                  </button>
+                  {fields.map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => handleFieldFilterSelect(f.id)}
+                      className={`block w-full rounded px-2 py-1.5 text-left text-xs ${
+                        fieldFilter === f.id ? "bg-zinc-100 font-medium" : "hover:bg-zinc-50"
+                      }`}
+                    >
+                      {f.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <div className="relative">
             <button
               ref={dateRangeButtonRef}

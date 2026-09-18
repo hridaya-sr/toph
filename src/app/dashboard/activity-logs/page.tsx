@@ -9,11 +9,13 @@ type SearchParams = { [key: string]: string | string[] | undefined };
 function parseFilters(sp: SearchParams) {
   const activityParam = typeof sp.activity === "string" ? sp.activity : undefined;
   const activity = ACTIVITY_TYPES.find((t) => t === activityParam);
+  const employeeId = typeof sp.employeeId === "string" ? sp.employeeId : undefined;
+  const fieldId = typeof sp.fieldId === "string" ? sp.fieldId : undefined;
   const sort: "asc" | "desc" = sp.sort === "asc" ? "asc" : "desc";
   const month = sp.month === "this";
   const rangeStart = typeof sp.rangeStart === "string" ? sp.rangeStart : undefined;
   const rangeEnd = typeof sp.rangeEnd === "string" ? sp.rangeEnd : undefined;
-  return { activity, sort, month, rangeStart, rangeEnd };
+  return { activity, employeeId, fieldId, sort, month, rangeStart, rangeEnd };
 }
 
 export default async function ActivityLogsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -42,11 +44,14 @@ export default async function ActivityLogsPage({ searchParams }: { searchParams:
 
   const [logs, employees, fields] = await Promise.all([
     getActivityLogsForFarm(user.farmId, {
-      // The real, complete history — but still scoped to the viewer's own
-      // logs for an employee, matching the same authorization rule already
-      // applied everywhere else (dashboard, log creation, deletion).
-      employeeId: user.role === "admin" ? undefined : user.id,
+      // An admin can narrow to one employee via the filter UI; an employee
+      // is always hard-scoped to their own logs regardless of any query
+      // param, matching the same authorization rule already applied
+      // everywhere else (dashboard, log creation, deletion) — the filter
+      // param is never even honored for a non-admin session.
+      employeeId: user.role === "admin" ? filters.employeeId : user.id,
       activityType: filters.activity,
+      fieldId: filters.fieldId,
       startDate,
       endDate,
       rangeStart,
@@ -76,6 +81,8 @@ export default async function ActivityLogsPage({ searchParams }: { searchParams:
         fields={fields}
         filters={{
           activity: filters.activity,
+          employeeId: user.role === "admin" ? filters.employeeId : undefined,
+          fieldId: filters.fieldId,
           sort: filters.sort,
           month: filters.month,
           rangeStart: filters.rangeStart,

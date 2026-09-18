@@ -67,3 +67,25 @@ export async function markConversationRead(otherUserId: string) {
   revalidatePath("/dashboard/messages");
   revalidatePath("/dashboard", "layout");
 }
+
+// The manual counterpart to markConversationRead — lets the caller put a
+// conversation back into their unread list, e.g. as a reminder to revisit
+// it. Same scoping: only ever touches messages sent TO the caller.
+export async function markConversationUnread(otherUserId: string) {
+  const session = await verifySession();
+  assertNotImpersonating(session);
+
+  await db
+    .update(directMessages)
+    .set({ readAt: null })
+    .where(
+      and(
+        eq(directMessages.farmId, session.farmId),
+        eq(directMessages.senderId, otherUserId),
+        eq(directMessages.recipientId, session.userId)
+      )
+    );
+
+  revalidatePath("/dashboard/messages");
+  revalidatePath("/dashboard", "layout");
+}

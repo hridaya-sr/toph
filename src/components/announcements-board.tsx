@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { format } from "date-fns";
-import { postAnnouncement } from "@/app/actions/announcements";
+import { Mail, MailOpen } from "lucide-react";
+import { postAnnouncement, markAnnouncementRead, markAnnouncementUnread } from "@/app/actions/announcements";
 import { Avatar } from "@/components/avatar";
 
 export type Announcement = {
@@ -13,14 +14,21 @@ export type Announcement = {
   authorName: string;
   authorAvatarColor: string | null;
   authorAvatarImage: string | null;
+  // This viewer's own read state — null/undefined means unread. Never a
+  // farm-wide property of the announcement (see getAnnouncementsForFarm).
+  readAt?: string | Date | null;
 };
 
 export function AnnouncementsBoard({
   announcements,
   canPost,
+  // True while an admin is in spectator mode — read state belongs to the
+  // employee being viewed, so it's never the admin's to change from here.
+  disabled = false,
 }: {
   announcements: Announcement[];
   canPost: boolean;
+  disabled?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(postAnnouncement, undefined);
   // The textarea is uncontrolled (matches the rest of this app's forms), so
@@ -70,19 +78,56 @@ export function AnnouncementsBoard({
       ) : (
         <div className="space-y-3">
           {announcements.map((a) => (
-            <div key={a.id} className="rounded-[14px] border border-[#f2f2f2] bg-white p-5">
-              <div className="flex items-center gap-3">
-                <Avatar name={a.authorName} avatarColor={a.authorAvatarColor} avatarImage={a.authorAvatarImage} size={32} />
-                <div>
-                  <p className="text-sm font-medium text-black">{a.authorName}</p>
-                  <p className="text-xs text-[#808080]">{format(new Date(a.createdAt), "MMM d, yyyy · h:mm a")}</p>
-                </div>
-              </div>
-              <p className="mt-3 whitespace-pre-wrap text-sm text-black">{a.body}</p>
-            </div>
+            <AnnouncementCard key={a.id} announcement={a} disabled={disabled} />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function AnnouncementCard({ announcement: a, disabled }: { announcement: Announcement; disabled: boolean }) {
+  const isRead = !!a.readAt;
+  const [isPending, startTransition] = useTransition();
+
+  const toggleRead = () => {
+    startTransition(async () => {
+      if (isRead) {
+        await markAnnouncementUnread(a.id);
+      } else {
+        await markAnnouncementRead(a.id);
+      }
+    });
+  };
+
+  return (
+    <div
+      className={`rounded-[14px] border p-5 ${isRead ? "border-[#f2f2f2] bg-white" : "border-emerald-200 bg-emerald-50/40"}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Avatar name={a.authorName} avatarColor={a.authorAvatarColor} avatarImage={a.authorAvatarImage} size={32} />
+          <div>
+            <p className="flex items-center gap-1.5 text-sm font-medium text-black">
+              {a.authorName}
+              {!isRead && <span className="h-2 w-2 rounded-full bg-emerald-500" aria-label="Unread" />}
+            </p>
+            <p className="text-xs text-[#808080]">{format(new Date(a.createdAt), "MMM d, yyyy · h:mm a")}</p>
+          </div>
+        </div>
+        {!disabled && (
+          <button
+            type="button"
+            onClick={toggleRead}
+            disabled={isPending}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#e6e6e6] bg-white px-3 py-1.5 text-xs text-[#4d4d4d] hover:bg-zinc-50 disabled:opacity-60"
+          >
+            {isRead ? <Mail size={13} /> : <MailOpen size={13} />}
+            {isRead ? "Mark as unread" : "Mark as read"}
+          </button>
+        )}
+      </div>
+      <p className="mt-3 whitespace-pre-wrap text-sm text-black">{a.body}</p>
     </div>
   );
 }
