@@ -1,4 +1,4 @@
-# Toph
+# Toph - Dev Challenge
 
 Farm workers log their work by voice in the field; Toph transcribes and structures each entry (activity type, field, chemicals/rates, timing, a response-accuracy score) into a searchable record, and admins review, tag, and act on that data from a dashboard. This submission implements the full product end-to-end — logging, review, scheduling, messaging, reporting — against a real Postgres/Drizzle backend, not just a single screen.
 
