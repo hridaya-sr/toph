@@ -17,7 +17,6 @@ export function LoginForm() {
           name="email"
           type="email"
           autoComplete="email"
-          defaultValue="admin@baysranch.farm"
           className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
         />
         {state?.errors?.email && (
@@ -33,7 +32,6 @@ export function LoginForm() {
           name="password"
           type="password"
           autoComplete="current-password"
-          defaultValue="password123"
           className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
         />
         {state?.errors?.password && (

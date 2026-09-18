@@ -21,10 +21,6 @@ export default function LoginPage() {
             Create one
           </Link>
         </p>
-        <div className="mt-8 rounded-lg border border-zinc-200 bg-white p-4 text-xs text-zinc-500">
-          <p className="font-medium text-zinc-700">Demo credentials (seeded)</p>
-          <p className="mt-1">admin@baysranch.farm / password123</p>
-        </div>
       </div>
     </div>
   );
