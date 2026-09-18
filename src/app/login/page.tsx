@@ -6,9 +6,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen w-full items-center justify-center bg-zinc-50 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-900 text-white font-semibold">
-            T
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element -- static local asset, matches the plain-<img> convention avatar.tsx already uses in this app */}
+          <img src="/logo.png" alt="Toph" className="mx-auto mb-3 h-10 w-10 rounded-lg object-cover" />
           <h1 className="text-xl font-semibold text-zinc-900">Sign in to Toph</h1>
           <p className="mt-1 text-sm text-zinc-500">
             Your farm&rsquo;s activity log, from voice to record.
