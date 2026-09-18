@@ -29,17 +29,7 @@ Then sign in at `http://localhost:3000/login` with:
 
 Pre-seeded with the demo dataset — no setup needed, just log in with one of the demo credentials above and start clicking around.
 
-## What's implemented vs. stubbed
-
-Every sidebar section is real and DB-backed except one:
-
-| Section | Status |
-|---|---|
-| Dashboard, Activity Logs, Map | ✅ Real |
-| Audit Manager, Reports, Schedule | ✅ Real |
-| Employees, Performance, Messages | ✅ Real |
-| Settings | ✅ Real |
-| **Support** | 🚧 Stubbed — a real support/ticketing flow is a separate product surface, out of scope for a farm-logging challenge submission |
+- Support Tab not implemented
 
 ## Key design decisions
 
